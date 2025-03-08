@@ -1,0 +1,38 @@
+{
+    "name": "relayer",
+    "version": "0.0.1",
+    "description": "Relayer service for submitting ZK proofs.",
+    "scripts": {
+        "server": "node src/server.js",
+        "worker": "node src/worker"
+    },
+    "author": "Gamma Phi",
+    "license": "MIT",
+    "dependencies": {
+        "ajv": "^6.12.5",
+        "async-mutex": "^0.2.4",
+        "bull": "^3.12.1",
+        "circomlib": "^2.0.5",
+        "dotenv": "^8.2.0",
+        "express": "^4.17.1",
+        "fixed-merkle-tree": "^0.7.3",
+        "ioredis": "^4.14.1",
+        "mongodb": "^4.1.1",
+        "node-fetch": "^2.7.0",
+        "snarkjs": "^0.7.5",
+        "uuid": "^8.3.0",
+        "wasmsnark": "^0.0.10",
+        "web3": "^4.16.0",
+        "web3-core-promievent": "^1.10.3",
+        "web3-utils": "^4.3.3",
+        "xian-js": "^0.1.9"
+    },
+    "devDependencies": {
+        "chai": "^4.2.0",
+        "eslint": "^6.6.0",
+        "eslint-config-prettier": "^6.12.0",
+        "eslint-plugin-prettier": "^3.1.4",
+        "mocha": "^11.1.0",
+        "prettier": "^2.1.2"
+    }
+}
