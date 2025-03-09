@@ -5,7 +5,8 @@ const assert = require('assert')
 const { bigInt } = require('snarkjs')
 const circomlib = require('circomlib')
 const merkleTree = require('fixed-merkle-tree')
-const buildBn128 = require('wasmsnark').buildBn128;
+const buildGroth16 = require('websnark/src/groth16')
+const websnarkUtils = require('websnark/src/utils')
 const { saveEventsToDB, loadEventsFromDB } = require('./mongo')
 const config = require('./config')
 
@@ -40,7 +41,7 @@ async function getTestEvents() {
 async function setup() {
     circuit = require(__dirname + '/../circuits/withdraw.json')
     proving_key = fs.readFileSync(__dirname + '/../circuits/withdraw_proving_key.bin').buffer
-    groth16 = await buildBn128()
+    groth16 = await buildGroth16()
 }
 
 
@@ -59,7 +60,7 @@ function computePedersenHash(hex) {
 
 async function loadEvents(contractName) {
     const events = await loadEventsFromDB(contractName)
-    const leafIndices = new Set(events.map((event)=>event.leafIndex))
+    const leafIndices = new Set(events.map((event) => event.leafIndex))
     let index = await readStateFromContract(contractName, 'next_index', [], 0)
     const eventsToSave = []
     for (let i = 1; i <= index; i++) {
@@ -89,9 +90,9 @@ async function readStateFromContract(contract, variableName, keys, default_value
             `${url}/${keys.join(':')}`
         }
         const res = await fetch({
-                url: url,
-                method: 'GET',
-            },
+            url: url,
+            method: 'GET',
+        },
         )
         if (res.status === 200) {
             let json = await res.json()
@@ -115,44 +116,44 @@ const pedersenHash = (data) => circomlib.babyJub.unpackPoint(circomlib.pedersenH
 
 /** BigNumber to hex string of specified length */
 const toHex = (number, length = 32) =>
-  '0x' +
-  (number instanceof Buffer ? number.toString('hex') : bigInt(number).toString(16)).padStart(length * 2, '0')
+    '0x' +
+    (number instanceof Buffer ? number.toString('hex') : bigInt(number).toString(16)).padStart(length * 2, '0')
 
 
 /**
  * Create deposit object from secret and nullifier
  */
- function createDeposit(nullifier, secret) {
+function createDeposit(nullifier, secret) {
     let deposit = { nullifier, secret }
     deposit.preimage = Buffer.concat([deposit.nullifier.leInt2Buff(31), deposit.secret.leInt2Buff(31)])
     deposit.commitment = pedersenHash(deposit.preimage)
     deposit.nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(31))
     return deposit
-  }
+}
 
 
 /**
  * Parses Tornado.cash note
  * @param noteString the note
  */
- function parseNote(note) {
+function parseNote(note) {
     // we are ignoring `currency`, `amount`, and `netId` for this minimal example
     const buf = Buffer.from(note, 'hex')
     const nullifier = bigInt.leBuff2int(buf.slice(0, 31))
     const secret = bigInt.leBuff2int(buf.slice(31, 62))
     return createDeposit(nullifier, secret)
-  }  
-  
-  /**
-   * Generate merkle tree for a deposit.
-   * Download deposit events from the contract, reconstructs merkle tree, finds our deposit leaf
-   * in it and generates merkle proof
-   * @param deposit Deposit object
-   */
-  async function generateMerkleProof(deposit, events) {
+}
+
+/**
+ * Generate merkle tree for a deposit.
+ * Download deposit events from the contract, reconstructs merkle tree, finds our deposit leaf
+ * in it and generates merkle proof
+ * @param deposit Deposit object
+ */
+async function generateMerkleProof(deposit, events) {
     const leaves = events
-      .sort((a, b) => a.leafIndex - b.leafIndex) // Sort events in chronological order
-      .map((e) => e.commitmentHex)
+        .sort((a, b) => a.leafIndex - b.leafIndex) // Sort events in chronological order
+        .map((e) => e.commitmentHex)
     const tree = new merkleTree(MERKLE_TREE_HEIGHT, leaves)
     // Find current commitment in the tree
     let depositEvent = events.find((e) => e.commitmentHex === toHex(deposit.commitment))
@@ -164,38 +165,38 @@ const toHex = (number, length = 32) =>
     const { pathElements, pathIndices } = tree.path(leafIndex)
 
     return { pathElements, pathIndices, root: tree.root() }
-  }
+}
 
 /**
  * Generate SNARK proof for withdrawal
  * @param deposit Deposit object
  * @param recipient Funds recipient
  */
- async function generateSnarkProof(deposit, recipient, fee, events) {
+async function generateSnarkProof(deposit, recipient, fee, events) {
     // Compute merkle proof of our commitment
     const { root, pathElements, pathIndices } = await generateMerkleProof(deposit, events)
-  
+
     // Prepare circuit input
     const input = {
-      // Public snark inputs
-      root: root,
-      nullifierHash: deposit.nullifierHash,
-      recipient: convertRHex(recipient),
-      relayer: convertRHex(config.relayer),
-      fee: fee || 0,
-      refund: 0,
-  
-      // Private snark inputs
-      nullifier: deposit.nullifier,
-      secret: deposit.secret,
-      pathElements: pathElements,
-      pathIndices: pathIndices,
+        // Public snark inputs
+        root: root,
+        nullifierHash: deposit.nullifierHash,
+        recipient: convertRHex(recipient),
+        relayer: convertRHex(config.relayer),
+        fee: fee || 0,
+        refund: 0,
+
+        // Private snark inputs
+        nullifier: deposit.nullifier,
+        secret: deposit.secret,
+        pathElements: pathElements,
+        pathIndices: pathIndices,
     }
-  
-    const proofData = await groth16.groth16GenProof(input, proving_key)
+
+    const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
     return proofData
 }
-  
+
 
 module.exports = {
     setup: setup,
